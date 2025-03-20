@@ -1,0 +1,149 @@
+#include <Arduino.h>
+
+// Motor 1 (Left)
+#define M1_EN 5   // Enable Motor 1 (PWM Speed Control)
+#define M1_DIR1 18  // Motor 1 Direction Pin 1
+#define M1_DIR2 19  // Motor 1 Direction Pin 2
+
+// Motor 2 (Right)
+#define M2_EN 21  // Enable Motor 2 (PWM Speed Control)
+#define M2_DIR1 23  // Motor 2 Direction Pin 1
+#define M2_DIR2 22  // Motor 2 Direction Pin 2
+
+// PWM Configuration
+#define PWM_FREQ 1000  // 1 kHz PWM frequency
+#define PWM_RES 8      // 8-bit resolution (0-255)
+#define PWM_CH_M1 0
+#define PWM_CH_M2 1
+
+int motor1Speed = 0, motor2Speed = 0;
+char motor1Dir = 'S', motor2Dir = 'S';  // 'F' = Forward, 'B' = Backward, 'S' = Stop
+
+void setup() {
+    Serial.begin(115200);
+    delay(1000);
+    Serial.println("L293D User Input Motor Control with ESP32");
+    Serial.println("Enter M1 Speed (0-255), M1 Direction (F/B), M2 Speed (0-255), M2 Direction (F/B)");
+    Serial.println("Example: 150,F,200,B");
+    Serial.println("Enter 'S' to stop all motors.");
+
+    // Set up motor direction pins
+    pinMode(M1_DIR1, OUTPUT);
+    pinMode(M1_DIR2, OUTPUT);
+    pinMode(M2_DIR1, OUTPUT);
+    pinMode(M2_DIR2, OUTPUT);
+
+    // Configure PWM channels for speed control
+    ledcSetup(PWM_CH_M1, PWM_FREQ, PWM_RES);
+    ledcAttachPin(M1_EN, PWM_CH_M1);
+
+    ledcSetup(PWM_CH_M2, PWM_FREQ, PWM_RES);
+    ledcAttachPin(M2_EN, PWM_CH_M2);
+}
+
+void loop() {
+    if (Serial.available()) {
+        String userInput = Serial.readStringUntil('\n');  // Read input until new line
+        userInput.trim();  // Remove spaces
+
+        if (userInput == "S") {
+            Serial.println("Stopping all motors...");
+            stopMotors();
+        } else {
+            parseInput(userInput);
+            updateMotors();
+        }
+    }
+}
+
+// Function to process user input
+void parseInput(String input) {
+    int comma1 = input.indexOf(',');
+    int comma2 = input.indexOf(',', comma1 + 1);
+    int comma3 = input.indexOf(',', comma2 + 1);
+
+    if (comma1 == -1 || comma2 == -1 || comma3 == -1) {
+        Serial.println("Invalid input format. Use: Speed1,Dir1,Speed2,Dir2");
+        return;
+    }
+
+    motor1Speed = input.substring(0, comma1).toInt();
+    motor1Dir = input.substring(comma1 + 1, comma2).charAt(0);
+    motor2Speed = input.substring(comma2 + 1, comma3).toInt();
+    motor2Dir = input.substring(comma3 + 1).charAt(0);
+
+    if (motor1Speed < 0 || motor1Speed > 255 || motor2Speed < 0 || motor2Speed > 255) {
+        Serial.println("Speed must be between 0-255.");
+        return;
+    }
+
+    if (motor1Dir != 'F' && motor1Dir != 'B' && motor1Dir != 'S') {
+        Serial.println("Invalid direction for Motor 1. Use 'F' (Forward), 'B' (Backward), or 'S' (Stop).");
+        return;
+    }
+
+    if (motor2Dir != 'F' && motor2Dir != 'B' && motor2Dir != 'S') {
+        Serial.println("Invalid direction for Motor 2. Use 'F' (Forward), 'B' (Backward), or 'S' (Stop).");
+        return;
+    }
+
+    Serial.print("Updated: M1 Speed=");
+    Serial.print(motor1Speed);
+    Serial.print(", M1 Direction=");
+    Serial.print(motor1Dir);
+    Serial.print(" | M2 Speed=");
+    Serial.print(motor2Speed);
+    Serial.print(", M2 Direction=");
+    Serial.println(motor2Dir);
+}
+
+// Function to update motor movement
+void updateMotors() {
+    // Motor 1 Control
+    if (motor1Dir == 'F') {
+        digitalWrite(M1_DIR1, HIGH);
+        digitalWrite(M1_DIR2, LOW);
+        ledcWrite(PWM_CH_M1, motor1Speed);
+    } else if (motor1Dir == 'B') {
+        digitalWrite(M1_DIR1, LOW);
+        digitalWrite(M1_DIR2, HIGH);
+        ledcWrite(PWM_CH_M1, motor1Speed);
+    } else {
+        digitalWrite(M1_DIR1, LOW);
+        digitalWrite(M1_DIR2, LOW);
+        ledcWrite(PWM_CH_M1, 0);
+    }
+
+    // Motor 2 Control
+    if (motor2Dir == 'F') {
+        digitalWrite(M2_DIR1, HIGH);
+        digitalWrite(M2_DIR2, LOW);
+        ledcWrite(PWM_CH_M2, motor2Speed);
+    } else if (motor2Dir == 'B') {
+        digitalWrite(M2_DIR1, LOW);
+        digitalWrite(M2_DIR2, HIGH);
+        ledcWrite(PWM_CH_M2, motor2Speed);
+    } else {
+        digitalWrite(M2_DIR1, LOW);
+        digitalWrite(M2_DIR2, LOW);
+        ledcWrite(PWM_CH_M2, 0);
+    }
+}
+
+// Function to stop all motors
+void stopMotors() {
+    motor1Speed = 0;
+    motor2Speed = 0;
+    motor1Dir = 'S';
+    motor2Dir = 'S';
+
+    digitalWrite(M1_DIR1, LOW);
+    digitalWrite(M1_DIR2, LOW);
+    digitalWrite(M2_DIR1, LOW);
+    digitalWrite(M2_DIR2, LOW);
+    
+    ledcWrite(PWM_CH_M1, 0);
+    ledcWrite(PWM_CH_M2, 0);
+
+    Serial.println("All motors stopped.");
+}
